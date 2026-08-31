@@ -80,7 +80,35 @@
   .daycard{background:var(--bg-card); border-radius:22px; padding:18px 20px; margin-bottom:18px; box-shadow:0 4px 16px rgba(180,120,90,.12);}
   .daycard-top{display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap;}
   .daycard-date{font-family:'Quicksand', sans-serif; font-size:19px; font-weight:700; color:var(--ink);}
+  .daycard-hours-row{display:flex; align-items:center; gap:6px;}
   .daycard-hours{font-size:13px; color:var(--ink-soft); font-weight:700;}
+  .daycard-hours.custom{color:var(--coral-deep);}
+  .edit-btn{
+    background:none; border:none; cursor:pointer; font-size:13px; padding:2px 4px;
+    border-radius:8px; opacity:.6; transition:opacity .15s ease, background .15s ease;
+    line-height:1;
+  }
+  .edit-btn:hover{opacity:1; background:var(--turquoise-soft);}
+  .reset-btn{
+    background:none; border:none; cursor:pointer; font-size:11px; color:var(--ink-soft);
+    font-weight:700; padding:2px 6px; border-radius:8px; opacity:.7;
+    font-family:'Quicksand', sans-serif; text-decoration:underline;
+  }
+  .reset-btn:hover{opacity:1;}
+  .hours-edit{display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+  .hours-edit input{
+    font-family:'Quicksand', sans-serif; font-weight:700; font-size:13px;
+    color:var(--ink); background:var(--turquoise-soft); border:2px solid var(--turquoise);
+    border-radius:10px; padding:4px 8px; width:150px; outline:none;
+  }
+  .hours-edit input:focus{border-color:var(--coral-deep);}
+  .hours-edit-btn{
+    border:none; border-radius:50%; width:24px; height:24px; cursor:pointer;
+    font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .hours-edit-save{background:var(--turquoise); color:#fff;}
+  .hours-edit-cancel{background:var(--line); color:var(--ink-soft);}
   .daycard-note{font-size:13.5px; color:var(--coral-deep); margin-top:6px; font-weight:700;}
   .badge{display:inline-block; font-size:11.5px; font-weight:700; padding:4px 11px; border-radius:20px; margin-top:8px;}
   .badge-A{background:#FFE3BE; color:#8A5A12;}
@@ -100,7 +128,7 @@
   .item:hover{transform:translateX(2px);}
   .item.checked{background:var(--turquoise-soft);}
   .item.checked .item-text{text-decoration:line-through; color:var(--ink-soft);}
-  .item-check{width:20px; height:20px; border-radius:50%; border:2px solid var(--coral); flex-shrink:0; display:flex; align-items:center; justify-content:center;}
+  .item-check{width:20px; height:20px; border-radius:50%; border:2px solid var(--coral); flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:all .15s ease;}
   .item.checked .item-check{background:var(--turquoise); border-color:var(--turquoise);}
   .item.checked .item-check::after{content:"✓"; color:#fff; font-size:11px; font-weight:700;}
   .item-emoji{font-size:18px; flex-shrink:0;}
@@ -138,11 +166,11 @@
 
   <div class="cal" id="cal"></div>
   <div class="legend">
-    <span><i style="background:#B98548"></i> Tôt (salle)</span>
-    <span><i style="background:#7C8A6E"></i> Matinée (salle)</span>
-    <span><i style="background:#8A6EAA"></i> Après-midi</span>
-    <span><i style="background:#C4707A"></i> Longue / coupée</span>
-    <span><i style="background:#A79A8A"></i> Repos</span>
+    <span><i style="background:#FFE3BE"></i> Tôt (salle)</span>
+    <span><i style="background:#D2F0E7"></i> Matinée (salle)</span>
+    <span><i style="background:#EBDFF7"></i> Après-midi</span>
+    <span><i style="background:#FFD9E2"></i> Longue / coupée</span>
+    <span><i style="background:#FBF1E4"></i> Repos</span>
   </div>
 
   <div class="daycard" id="daycard"></div>
@@ -370,6 +398,22 @@ const ROUTINES = {
 
 let viewYear, viewMonth, selectedDate;
 
+// ---- Storage robuste ----
+let storageAvailable = false;
+let fallbackMemory = {};
+
+function initStorage(){
+  try{
+    localStorage.setItem('__test__', '1');
+    localStorage.removeItem('__test__');
+    storageAvailable = true;
+    console.log('✅ localStorage OK');
+  }catch(e){
+    console.warn('⚠️ localStorage indisponible, mode mémoire activé');
+    storageAvailable = false;
+  }
+}
+
 function todayUTC(){
   const n = new Date();
   return new Date(n.getFullYear(), n.getMonth(), n.getDate());
@@ -377,6 +421,82 @@ function todayUTC(){
 
 function fmtKey(date){
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+
+// ---- Horaires personnalisés (override manuel, par date précise) ----
+function getHoursOverride(date){
+  const key = `routine-hours-override:${fmtKey(date)}`;
+  try{
+    if(storageAvailable){
+      return localStorage.getItem(key);
+    }else{
+      return fallbackMemory[key] || null;
+    }
+  }catch(e){
+    console.error('Erreur getHoursOverride:', e);
+    return null;
+  }
+}
+
+function setHoursOverride(date, hoursText){
+  const key = `routine-hours-override:${fmtKey(date)}`;
+  try{
+    if(storageAvailable){
+      localStorage.setItem(key, hoursText);
+    }else{
+      fallbackMemory[key] = hoursText;
+    }
+    console.log('✏️ Horaire personnalisé sauvegardé:', key, hoursText);
+  }catch(e){
+    console.error('Erreur setHoursOverride:', e);
+  }
+}
+
+function clearHoursOverride(date){
+  const key = `routine-hours-override:${fmtKey(date)}`;
+  try{
+    if(storageAvailable){
+      localStorage.removeItem(key);
+    }else{
+      delete fallbackMemory[key];
+    }
+    console.log('↺ Horaire réinitialisé:', key);
+  }catch(e){
+    console.error('Erreur clearHoursOverride:', e);
+  }
+}
+
+let editingHours = false;
+
+function getChecked(date){
+  const key = `routine-checked:${fmtKey(date)}`;
+  try{
+    if(storageAvailable){
+      const stored = localStorage.getItem(key);
+      return stored ? JSON.parse(stored) : {};
+    }else{
+      return fallbackMemory[key] ? JSON.parse(fallbackMemory[key]) : {};
+    }
+  }catch(e){
+    console.error('Erreur getChecked:', e);
+    return {};
+  }
+}
+
+function setChecked(date, data){
+  const key = `routine-checked:${fmtKey(date)}`;
+  try{
+    const json = JSON.stringify(data);
+    if(storageAvailable){
+      localStorage.setItem(key, json);
+      console.log('✅ Saved:', key);
+    }else{
+      fallbackMemory[key] = json;
+      console.log('💾 Sauvegardé en mémoire:', key);
+    }
+  }catch(e){
+    console.error('Erreur setChecked:', e);
+  }
 }
 
 function buildCalendar(){
@@ -406,40 +526,86 @@ function buildCalendar(){
     const cell = document.createElement('div');
     cell.className = `cal-cell t-${info.type}` + (isSelected?' selected':'') + (isToday?' today':'');
     cell.innerHTML = `${day}<span class="dot"></span>`;
-    cell.onclick = ()=>{ selectedDate = date; render(); };
+    cell.onclick = ()=>{ selectedDate = date; editingHours = false; render(); };
     cal.appendChild(cell);
   }
 
   document.getElementById('monthLabel').textContent = `${MONTHS[viewMonth]} ${viewYear}`;
 }
 
-async function getChecked(date){
-  try{
-    const r = await window.storage.get(`routine-checked:${fmtKey(date)}`);
-    return r ? JSON.parse(r.value) : {};
-  }catch(e){ return {}; }
-}
-async function setChecked(date, data){
-  try{
-    await window.storage.set(`routine-checked:${fmtKey(date)}`, JSON.stringify(data));
-  }catch(e){ console.error('storage error', e); }
-}
-
-async function render(){
+function render(){
   buildCalendar();
   const info = dayInfoFor(selectedDate);
   const routine = ROUTINES[info.type];
   const dow = selectedDate.getDay();
 
+  const override = getHoursOverride(selectedDate);
+  const defaultHoursText = info.type==="REST" ? info.label : info.hours;
+  const displayHoursText = override || defaultHoursText;
+  const hasOverride = !!override;
+
   const daycard = document.getElementById('daycard');
-  daycard.innerHTML = `
-    <div class="daycard-top">
-      <div class="daycard-date">${DOW[dow]} ${selectedDate.getDate()} ${MONTHS[selectedDate.getMonth()].toLowerCase()}</div>
-      <div class="daycard-hours">${info.type==="REST" ? info.label : info.hours}</div>
-    </div>
-    <span class="badge badge-${info.type}">${routine.label}</span>
-    <div class="daycard-note">${info.note}</div>
-  `;
+
+  if(editingHours){
+    daycard.innerHTML = `
+      <div class="daycard-top">
+        <div class="daycard-date">${DOW[dow]} ${selectedDate.getDate()} ${MONTHS[selectedDate.getMonth()].toLowerCase()}</div>
+      </div>
+      <div class="hours-edit">
+        <input type="text" id="hoursInput" value="${override || (info.type==="REST" ? "" : info.hours)}" placeholder="ex: 08:00–16:00">
+        <button class="hours-edit-btn hours-edit-save" id="saveHours" title="Valider">✓</button>
+        <button class="hours-edit-btn hours-edit-cancel" id="cancelHours" title="Annuler">✕</button>
+      </div>
+      <span class="badge badge-${info.type}">${routine.label}</span>
+      <div class="daycard-note">${info.note}</div>
+    `;
+
+    document.getElementById('saveHours').addEventListener('click', ()=>{
+      const val = document.getElementById('hoursInput').value.trim();
+      if(val){
+        setHoursOverride(selectedDate, val);
+      }
+      editingHours = false;
+      render();
+    });
+    document.getElementById('cancelHours').addEventListener('click', ()=>{
+      editingHours = false;
+      render();
+    });
+    document.getElementById('hoursInput').addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter') document.getElementById('saveHours').click();
+      if(e.key === 'Escape') document.getElementById('cancelHours').click();
+    });
+    document.getElementById('hoursInput').focus();
+  }else{
+    daycard.innerHTML = `
+      <div class="daycard-top">
+        <div class="daycard-date">${DOW[dow]} ${selectedDate.getDate()} ${MONTHS[selectedDate.getMonth()].toLowerCase()}</div>
+        <div class="daycard-hours-row">
+          <div class="daycard-hours${hasOverride ? ' custom' : ''}">${displayHoursText}</div>
+          <button class="edit-btn" id="editHoursBtn" title="Modifier l'horaire">✏️</button>
+          ${hasOverride ? `<button class="reset-btn" id="resetHoursBtn" title="Revenir à l'horaire par défaut">↺</button>` : ''}
+        </div>
+      </div>
+      <span class="badge badge-${info.type}">${routine.label}</span>
+      <div class="daycard-note">${info.note}</div>
+    `;
+
+    const editBtn = document.getElementById('editHoursBtn');
+    if(editBtn){
+      editBtn.addEventListener('click', ()=>{
+        editingHours = true;
+        render();
+      });
+    }
+    const resetBtn = document.getElementById('resetHoursBtn');
+    if(resetBtn){
+      resetBtn.addEventListener('click', ()=>{
+        clearHoursOverride(selectedDate);
+        render();
+      });
+    }
+  }
 
   const quote = dailyPick(selectedDate, QUOTES);
   const word = dailyPick(selectedDate, WORDS);
@@ -455,7 +621,7 @@ async function render(){
     </div>
   `;
 
-  const checked = await getChecked(selectedDate);
+  const checked = getChecked(selectedDate);
   let total = 0, done = 0;
   routine.blocks.forEach(b => total += b.items.length);
 
@@ -478,11 +644,15 @@ async function render(){
       const item = document.createElement('div');
       item.className = 'item' + (isChecked ? ' checked' : '');
       item.innerHTML = `<span class="item-check"></span><span class="item-emoji">${emoji}</span><span class="item-text">${label}</span>`;
-      item.onclick = async ()=>{
+      
+      item.addEventListener('click', function(e){
+        e.preventDefault();
+        e.stopPropagation();
         checked[key] = !checked[key];
-        await setChecked(selectedDate, checked);
+        setChecked(selectedDate, checked);
         render();
-      };
+      });
+      
       bDiv.appendChild(item);
     });
     blocksEl.appendChild(bDiv);
@@ -492,22 +662,24 @@ async function render(){
   document.getElementById('progressLabel').textContent = `${done} / ${total}`;
 }
 
-document.getElementById('prevMonth').onclick = ()=>{
+document.getElementById('prevMonth').addEventListener('click', ()=>{
   viewMonth--; if(viewMonth<0){viewMonth=11; viewYear--;}
   buildCalendar();
-};
-document.getElementById('nextMonth').onclick = ()=>{
+});
+
+document.getElementById('nextMonth').addEventListener('click', ()=>{
   viewMonth++; if(viewMonth>11){viewMonth=0; viewYear++;}
   buildCalendar();
-};
+});
 
 (function init(){
+  initStorage();
   const today = todayUTC();
-  // default to today if it's Aug 2026 or later, else start at the anchor month
   selectedDate = today.getFullYear() > 2026 || (today.getFullYear()===2026 && today.getMonth()>=7) ? today : new Date(2026,7,31);
   viewYear = selectedDate.getFullYear();
   viewMonth = selectedDate.getMonth();
   render();
+  console.log('🚀 Rythme chargé');
 })();
 </script>
 </body>
